@@ -5,6 +5,11 @@ import re
 import asyncio
 
 @click.group()
+def cli():
+    """AtlasAI CLI - AI-powered tools for AtlasServer deployments."""
+    pass
+
+@click.group()
 def ai():
     pass
 
@@ -201,6 +206,11 @@ def ai_suggest_command(app_directory, stream, interactive, debug, language):
         import traceback
         click.echo(traceback.format_exc())
 
+cli.add_command(ai)
+
+def main():
+    """Punto de entrada principal para el CLI."""
+    cli()
 
 if __name__ == "__main__":
-    ai()
+    main()

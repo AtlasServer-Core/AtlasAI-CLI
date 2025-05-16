@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "atlasai-cli"
-version = "0.1.0"
+version = "0.1.5"
 description = "AI-powered CLI for AtlasServer deployments: suggest, optimize & debug commands"
 readme = "README.md"
 license = { file = "LICENSE" }
@@ -38,7 +38,7 @@ dependencies = [
 "Issue Tracker" = "https://github.com/AtlasServer-Core/AtlasAI-CLI/issues"
 
 [tool.setuptools.packages.find]
-where = ["atlasai"]
+where = ["."]
 
 [project.scripts]
 atlasai = "atlasai.cli:main"
