@@ -1,0 +1,44 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "atlasai-cli"
+version = "0.1.0"
+description = "AI-powered CLI for AtlasServer deployments: suggest, optimize & debug commands"
+readme = "README.md"
+license = { file = "LICENSE" }
+
+authors = [
+    {name = "AtlasServer-Core / Fredy", email = "riveraaai200678@gmail.com"}
+]
+
+dependencies = [
+  "passlib",
+  "psutil",
+  "pydantic",
+  "python-multipart",
+  "aiofiles",
+  "click>=8.0.0",
+  "platformdirs",
+  "ollama",
+  "langchain",
+  "langchain-experimental",
+  "langchain-community",
+  "duckduckgo-search",
+  "openai-agents",
+  "openai",
+  "rich"
+]
+
+[project.urls]
+"Homepage" = "https://github.com/AtlasServer-Core/AtlasAI-CLI"
+"Repository" = "https://github.com/AtlasServer-Core/AtlasAI-CLI"
+"Documentation" = "https://github.com/AtlasServer-Core/AtlasAI-CLI#readme"
+"Issue Tracker" = "https://github.com/AtlasServer-Core/AtlasAI-CLI/issues"
+
+[tool.setuptools.packages.find]
+where = ["atlasai"]
+
+[project.scripts]
+atlasai = "atlasai.cli:main"
