@@ -1,4 +1,4 @@
-# app/ai/tools.py
+# atlasai/tools/tools.py
 import platform
 import logging
 import os
@@ -24,31 +24,31 @@ def search(query: str) -> str:
         return f"Error performing search: {str(e)}"
 
 def list_directory(directory: str = ".") -> str:
-    """Lista archivos en el directorio especificado.
+    """List files in the specified directory.
     
     Args:
-        directory: Ruta a listar (valor predeterminado: directorio actual)
+        directory: Path to list (default: current directory)
     
     Returns:
-        String con el contenido del directorio
+        String with directory contents
     """
     try:
         if not os.path.isdir(directory):
-            return f"Error: '{directory}' no es un directorio válido"
+            return f"Error: '{directory}' is not a valid directory"
         
-        # Usar directamente el comando 'ls' o 'dir' dependiendo del sistema
+        # Use 'ls' or 'dir' command directly depending on the system
         if platform.system() == "Windows":
             result = subprocess.run(["dir", "/b", directory], capture_output=True, text=True)
         else:
             result = subprocess.run(["ls", "-la", directory], capture_output=True, text=True)
             
         if result.returncode != 0:
-            return f"Error listando directorio: {result.stderr}"
+            return f"Error listing directory: {result.stderr}"
         
         return result.stdout
     except Exception as e:
-        logger.error(f"Error listando directorio {directory}: {str(e)}")
-        return f"Error listando directorio: {str(e)}"
+        logger.error(f"Error listing directory {directory}: {str(e)}")
+        return f"Error listing directory: {str(e)}"
 
 def read_file(file_path: str) -> str:
     """Read the contents of a file.
@@ -78,19 +78,19 @@ def read_file(file_path: str) -> str:
         return f"Error reading file: {str(e)}"
 
 def execute_command(commands: List[str]) -> str:
-    """Ejecuta comandos de shell.
+    """Execute shell commands.
     
     Args:
-        commands: Lista de comandos a ejecutar
+        commands: List of commands to execute
         
     Returns:
-        Salida del comando
+        Command output
     """
     try:
-        # Limitar comandos a operaciones seguras de solo lectura
+        # Limit commands to safe read-only operations
         safe_commands = ["ls", "dir", "cat", "type", "find", "grep", "head", "tail"]
         
-        # Verificar que los comandos son seguros
+        # Verify commands are safe
         for cmd in commands:
             cmd_parts = cmd.split()
             if not cmd_parts:
@@ -98,11 +98,11 @@ def execute_command(commands: List[str]) -> str:
                 
             base_cmd = cmd_parts[0].lower()
             if base_cmd not in safe_commands:
-                return f"Error: Comando no permitido '{base_cmd}'. Solo se permiten comandos de lectura."
+                return f"Error: Command not allowed '{base_cmd}'. Only read commands are permitted."
         
-        # Usar ShellTool para ejecutar comandos
+        # Use ShellTool to execute commands
         shell_tool = ShellTool()
         return shell_tool.run({"commands": commands})
     except Exception as e:
-        logger.error(f"Error ejecutando comandos {commands}: {str(e)}")
-        return f"Error ejecutando comandos: {str(e)}"
+        logger.error(f"Error executing commands {commands}: {str(e)}")
+        return f"Error executing commands: {str(e)}"

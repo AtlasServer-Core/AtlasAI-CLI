@@ -1,4 +1,4 @@
-# app/ai/ai_cli.py
+# atlasai/ai/ai_cli.py
 import os
 import json
 import logging

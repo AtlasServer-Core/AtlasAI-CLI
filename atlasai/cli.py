@@ -3,6 +3,14 @@ import os
 import json
 import re
 import asyncio
+from rich.console import Console
+from rich.panel import Panel
+from rich.table import Table
+from rich.syntax import Syntax
+from rich.prompt import Confirm
+
+# Crear consola global
+console = Console()
 
 @click.group()
 def cli():
@@ -24,9 +32,9 @@ def ai_setup(provider, model):
     success = ai_cli.setup(provider, model, None)
     
     if success:
-        click.echo(f"✅ AI configuration saved: {provider} / {model}")
+        console.print(f"[bold green]✅ AI configuration saved:[/] [blue]{provider}[/] / [blue]{model}[/]")
     else:
-        click.echo("❌ Error saving AI configuration")
+        console.print("[bold red]❌ Error saving AI configuration[/]")
 
 @ai.command("suggest")
 @click.argument("app_directory", type=click.Path(exists=True))
@@ -41,83 +49,92 @@ def ai_suggest_command(app_directory, stream, interactive, debug, language):
     try:
         app_directory = os.path.abspath(app_directory)
         
-        # Cargar configuración AI
+        # Load AI configuration
         from atlasai.ai.ai_cli import AtlasServerAICLI
         ai_cli = AtlasServerAICLI()
         configured_model = ai_cli.ai_config.get("model", "codellama:7b")
         
-        click.echo(f"🤖 Using AI model: {configured_model}")
+        console.print(f"[bold cyan]🤖 Using AI model:[/] [blue]{configured_model}[/]")
         
-        # Verificar Ollama
+        # Verify Ollama
         import requests
         try:
-            response = requests.get("http://localhost:11434/api/version", timeout=2)
+            with console.status("[bold blue]Connecting to Ollama server...[/]", spinner="dots"):
+                response = requests.get("http://localhost:11434/api/version", timeout=2)
+            
             if response.status_code != 200:
-                click.echo("❌ Error: Could not connect to Ollama server")
+                console.print("[bold red]❌ Error: Could not connect to Ollama server[/]")
                 return
             else:
                 if debug:
-                    click.echo(f"✅ Connected to Ollama: {response.json()}")
+                    console.print(Panel.fit(
+                        f"Version: {response.json().get('version', 'unknown')}",
+                        title="[bold green]✅ Connected to Ollama[/]",
+                        border_style="green"
+                    ))
         except Exception as e:
-            click.echo(f"❌ Error: Ollama server is not running. {str(e)}")
-            click.echo("   Run 'ollama serve' or ensure the Ollama service is running.")
+            console.print("[bold red]❌ Error: Ollama server is not running[/]")
+            console.print(f"   [italic]{str(e)}[/]")
+            console.print("   Run [bold]'ollama serve'[/] or ensure the Ollama service is running.")
             return
         
         if interactive:
-            # Use el nuevo enfoque simplificado (sin herramientas complejas)
+            # Use the simplified approach (without complex tools)
             from atlasai.ai.ai_agent import AgentCLI
             agent = AgentCLI(model=configured_model, stream=stream, language=language)
             
-            click.echo(f"🔍 Analyzing project at: {app_directory}")
+            console.print(Panel(
+                f"[cyan]Directory:[/] [bold]{app_directory}[/]",
+                title="[bold blue]🔍 Project Analysis[/]",
+                border_style="blue"
+            ))
             
-            # Define callback para streaming si es necesario
+            # Define callback for streaming if needed
             if stream:
                 full_response_text = []
                 
                 def collect_response(chunk):
                     full_response_text.append(chunk)
-                    click.echo(chunk, nl=False)
+                    console.print(chunk, end="", highlight=False)
                 
-                # Ejecutar con streaming
+                # Execute with streaming
                 response = asyncio.run(agent.analyze_project(
                     app_directory, 
                     callback=collect_response
                 ))
                 
-                # Si la respuesta está vacía pero tenemos texto, úsalo
+                # If response is empty but we have text, use it
                 if not response and full_response_text:
                     response = ''.join(full_response_text)
-                click.echo("\n")
+                console.print("\n")
             else:
-                # Ejecutar sin streaming
-                click.echo("⏳ This may take a moment...")
-                response = asyncio.run(agent.analyze_project(app_directory))
+                # Execute without streaming
+                with console.status("[bold blue]Analyzing project structure...[/]", spinner="dots"):
+                    response = asyncio.run(agent.analyze_project(app_directory))
             
-            # Mostrar respuesta completa en modo debug
+            # Show complete response in debug mode
             if debug:
-                click.echo("\n🔧 DEBUG - Raw response:")
-                click.echo("-"*50)
-                click.echo(response)
-                click.echo("-"*50)
+                console.print("\n[bold blue]🔧 DEBUG - Raw response:[/]")
+                console.print(Syntax(response, "markdown", theme="monokai", line_numbers=True))
             
-            # Procesar la respuesta para extraer JSON
+            # Process response to extract JSON
             try:
-                # Buscar bloque JSON en formato markdown
+                # Look for JSON block in markdown format
                 json_match = re.search(r'```(?:json)?\s*({[\s\S]*?})\s*```', response, re.DOTALL)
                 if json_match:
                     try:
                         result = json.loads(json_match.group(1))
                     except:
-                        # Intentar limpiar el JSON antes de parsearlo
+                        # Try to clean JSON before parsing
                         json_str = json_match.group(1)
-                        # Eliminar líneas de comentarios o texto no-JSON
+                        # Remove comment lines or non-JSON text
                         json_str = re.sub(r'^\s*//.*$', '', json_str, flags=re.MULTILINE)
                         try:
                             result = json.loads(json_str)
                         except:
                             result = {"type": "Unknown", "reasoning": response}
                 else:
-                    # Buscar JSON fuera de bloques markdown
+                    # Look for JSON outside markdown blocks
                     json_match = re.search(r'({[\s\S]*})', response)
                     if json_match:
                         try:
@@ -125,91 +142,102 @@ def ai_suggest_command(app_directory, stream, interactive, debug, language):
                         except:
                             result = {"type": "Unknown", "reasoning": response}
                     else:
-                        # No se encontró JSON, usar el texto completo
+                        # No JSON found, use the full text
                         result = {"type": "Unknown", "reasoning": response}
             except Exception as e:
                 if debug:
-                    click.echo(f"Error parsing JSON: {str(e)}")
+                    console.print(f"[bold red]Error parsing JSON:[/] {str(e)}")
                 result = {"type": "Unknown", "reasoning": response}
             
         else:
-            # Usar el enfoque no interactivo original
+            # Use the original non-interactive approach
             if stream:
-                # Callback para streaming
-                click.echo("🤖 Analyzing project structure...")
+                # Callback for streaming
+                console.print("[bold blue]🤖 Analyzing project structure...[/]")
                 
                 def stream_callback(chunk):
-                    click.echo(chunk, nl=False)
+                    console.print(chunk, end="", highlight=False)
                 
-                # Ejecutar con streaming
+                # Execute with streaming
                 result = asyncio.run(ai_cli.suggest_deployment_command(
                     app_directory, 
                     stream=True, 
                     callback=stream_callback
                 ))
-                click.echo("\n")
+                console.print("\n")
             else:
-                # Ejecutar sin streaming
-                click.echo("🤖 Analyzing project structure...")
-                result = asyncio.run(ai_cli.suggest_deployment_command(app_directory))
+                # Execute without streaming
+                with console.status("[bold blue]Analyzing project structure...[/]", spinner="dots"):
+                    result = asyncio.run(ai_cli.suggest_deployment_command(app_directory))
         
-        # Mostrar resultados formateados
-        click.echo("\n" + "="*50)
-        click.echo("📊 DEPLOYMENT RECOMMENDATIONS")
-        click.echo("="*50)
+        # Display formatted results
+        console.print("\n")
+        console.print(Panel(
+            "[bold cyan]AI has analyzed your project and has recommendations for deployment[/]",
+            title="[bold green]📊 DEPLOYMENT RECOMMENDATIONS[/]",
+            border_style="green",
+            expand=False
+        ))
         
         if isinstance(result, dict):
-            # Si es un diccionario (JSON parseado exitosamente)
-            click.echo(f"📂 Detected project type: {result.get('type', 'Unknown')}")
+            # If it's a dictionary (successfully parsed JSON)
+            recommendations_table = Table(show_header=False, box=None)
+            recommendations_table.add_column("Property", style="cyan")
+            recommendations_table.add_column("Value", style="green")
+            
+            recommendations_table.add_row("📂 Project Type", result.get('type', 'Unknown'))
             
             if result.get("command"):
-                click.echo(f"🚀 Recommended command: {result['command']}")
+                recommendations_table.add_row("🚀 Command", result['command'])
             
             if result.get("port"):
-                click.echo(f"🔌 Recommended port: {result['port']}")
+                recommendations_table.add_row("🔌 Port", result['port'])
+            
+            console.print(recommendations_table)
                 
             if result.get("environment_vars"):
-                click.echo("\n📋 Recommended environment variables:")
+                env_table = Table(title="📋 Recommended Environment Variables", show_header=True)
+                env_table.add_column("Variable", style="cyan")
+                env_table.add_column("Value", style="green")
+                
                 for key, value in result["environment_vars"].items():
-                    click.echo(f"  {key}={value}")
+                    env_table.add_row(key, str(value))
+                
+                console.print(env_table)
             
             if result.get("reasoning"):
-                click.echo("\n🔍 Analysis details:")
-                click.echo("-"*50)
-                reasoning = result["reasoning"]
-                if isinstance(reasoning, str):
-                    # Limitar longitud de líneas para mejor visualización
-                    for line in reasoning.split("\n"):
-                        if len(line) > 80:
-                            parts = [line[i:i+80] for i in range(0, len(line), 80)]
-                            for part in parts:
-                                click.echo(f"  {part}")
-                        else:
-                            click.echo(f"  {line}")
-                else:
-                    click.echo(f"  {reasoning}")
+                console.print(Panel(
+                    result["reasoning"],
+                    title="[bold blue]🔍 Analysis Details[/]",
+                    border_style="blue",
+                    width=100,
+                    expand=False
+                ))
         else:
-            # Si no es un diccionario (string u otro tipo)
-            click.echo(f"📂 Detected project type: Unknown")
-            click.echo("\n🔍 Analysis details:")
-            click.echo("-"*50)
-            click.echo(f"  {result}")
+            # If it's not a dictionary (string or other type)
+            console.print(f"[bold cyan]📂 Detected project type:[/] [yellow]Unknown[/]")
+            console.print(Panel(
+                str(result),
+                title="[bold blue]🔍 Analysis Details[/]",
+                border_style="blue", 
+                width=100
+            ))
         
-        click.echo("\n" + "="*50)
-                
-        if click.confirm("Would you like to register this application with this configuration?"):
-            # Código para registrar automáticamente
-            click.echo("Automatic registration implementation pending.")
+        console.print()
+        
+        if Confirm.ask("Would you like to register this application with this configuration?"):
+            # Code for automatic registration
+            console.print("[yellow]Automatic registration implementation pending.[/]")
             
     except Exception as e:
-        click.echo(f"❌ Error during analysis: {str(e)}")
+        console.print(f"[bold red]❌ Error during analysis:[/] {str(e)}")
         import traceback
-        click.echo(traceback.format_exc())
+        console.print(Syntax(traceback.format_exc(), "python", theme="monokai"))
 
 cli.add_command(ai)
 
 def main():
-    """Punto de entrada principal para el CLI."""
+    """Main entry point for the CLI."""
     cli()
 
 if __name__ == "__main__":
