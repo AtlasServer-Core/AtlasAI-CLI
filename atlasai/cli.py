@@ -8,6 +8,7 @@ from rich.panel import Panel
 from rich.table import Table
 from rich.syntax import Syntax
 from rich.prompt import Confirm
+from rich.markdown import Markdown
 
 # Crear consola global
 console = Console()
@@ -185,13 +186,13 @@ def ai_suggest_command(app_directory, stream, interactive, debug, language):
             recommendations_table.add_column("Property", style="cyan")
             recommendations_table.add_column("Value", style="green")
             
-            recommendations_table.add_row("📂 Project Type", result.get('type', 'Unknown'))
+            recommendations_table.add_row("📂 Project Type", str(result.get('type', 'Unknown')))
             
             if result.get("command"):
-                recommendations_table.add_row("🚀 Command", result['command'])
+                recommendations_table.add_row("🚀 Command", str(result['command']))
             
             if result.get("port"):
-                recommendations_table.add_row("🔌 Port", result['port'])
+                recommendations_table.add_row("🔌 Port", str(result['port']))
             
             console.print(recommendations_table)
                 
@@ -206,8 +207,9 @@ def ai_suggest_command(app_directory, stream, interactive, debug, language):
                 console.print(env_table)
             
             if result.get("reasoning"):
+                markdown_content = Markdown(result["reasoning"])
                 console.print(Panel(
-                    result["reasoning"],
+                    markdown_content,
                     title="[bold blue]🔍 Analysis Details[/]",
                     border_style="blue",
                     width=100,
