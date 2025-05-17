@@ -4,7 +4,7 @@
 
 ## Why a separate package?
 
-AtlasAI-CLI was born as part of [AtlasServer-Core v0.2.5](https://github.com/AtlasServer-Core/AtlasServer-Core/releases/tag/v0.2.5), but is now distributed as an independent package to:
+AtlasAI-CLI was born as part of [[AtlasServer-Core v0.2.5](https://github.com/AtlasServer-Core/AtlasServer-Core/releases/tag/v0.2.5)](https://github.com/AtlasServer-Core/AtlasServer-Core/releases/tag/v0.2.5), but is now distributed as an independent package to:
 
 - **Reduce dependencies**: AtlasServer-Core stays lighter
 - **Better performance**: Faster installation when AI functions aren't needed
@@ -26,7 +26,7 @@ AtlasAI-CLI was born as part of [AtlasServer-Core v0.2.5](https://github.com/Atl
 ### 🌍 Multilingual support
 - Explanations in English or Spanish according to preference
 
-### 💻 Rich terminal interface
+### 💻 [Rich](https://github.com/Textualize/rich) terminal interface
 - Enhanced visualization with [Rich](https://github.com/Textualize/rich)
 - Real-time responses through streaming
 - Panels, tables and Markdown format for better readability
@@ -56,7 +56,7 @@ pip install atlasserver atlasai-cli
 atlasai ai setup --provider ollama --model llama3:8b
 
 # Setup with OpenAI (cloud)
-atlasai ai setup --provider openai --model gpt-4.1 --api-key YOUR_API_KEY
+atlasai ai setup --provider openai --model gpt-4 --api-key YOUR_API_KEY
 ```
 
 ### Project analysis:
@@ -81,13 +81,18 @@ atlasserver ai setup --provider ollama --model llama3:8b
 atlasserver ai suggest ~/path/to/my-project
 ```
 
+## Demo
 
+### AtlasAI-CLI in Action
+
+![Atlas-Demo-1](https://res.cloudinary.com/dmtomxyvm/image/upload/v1747456012/xcd2bjkgogrovkn3l8xe.png)
+![Atlas-Demo-2](https://res.cloudinary.com/dmtomxyvm/image/upload/v1747456012/moq7lcburhifa4as0zsj.png)
 
 ## Compatibility
 
 AtlasAI-CLI works best with:
 - Post-Llama 3 models for Ollama
-- GPT-4o or higher for OpenAI
+- GPT-3.5 or higher for OpenAI
 
 ## Contributions
 
@@ -95,7 +100,7 @@ Contributions are welcome! If you find bugs or have ideas for improvements, plea
 
 ## License
 
-AtlasAI-CLI is distributed under the [Apache 2.0 license](LICENSE).
+AtlasAI-CLI is distributed under the [Apache 2.0 license](https://claude.ai/chat/LICENSE).
 
 ---
 
