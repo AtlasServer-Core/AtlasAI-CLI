@@ -152,55 +152,63 @@ class AgentCLI:
                     callback(f"[bold red]❌ {error_msg}[/bold red]")
                 return error_msg
         
-            # Configure tools with correct format for OpenAI
             tools = [
                 {
                     "type": "function",
-                    "name": "list_directory",
-                    "description": "List files and folders in a directory",
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "directory": {
-                                "type": "string",
-                                "description": "Path to the directory to list"
-                            }
+                    "function": {
+                        "name": "list_directory",
+                        "description": "List files and folders in a directory",
+                        "parameters": {
+                            "type": "object",
+                            "properties": {
+                                "directory": {
+                                    "type": "string",
+                                    "description": "Path to the directory to list"
+                                }
+                            },
+                            "required": ["directory"],
+                            "additionalProperties": False
                         },
-                        "required": ["directory"],
-                        "additionalProperties": False
+                        "strict": True
                     }
                 },
                 {
                     "type": "function",
-                    "name": "read_file",
-                    "description": "Read the contents of a file",
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "file_path": {
-                                "type": "string",
-                                "description": "Path to the file to read"
-                            }
+                    "function": {
+                        "name": "read_file",
+                        "description": "Read the contents of a file",
+                        "parameters": {
+                            "type": "object",
+                            "properties": {
+                                "file_path": {
+                                    "type": "string",
+                                    "description": "Path to the file to read"
+                                }
+                            },
+                            "required": ["file_path"],
+                            "additionalProperties": False
                         },
-                        "required": ["file_path"],
-                        "additionalProperties": False
+                        "strict": True
                     }
                 },
                 {
                     "type": "function",
-                    "name": "execute_command",
-                    "description": "Execute a shell command to navigate or explore the filesystem",
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "commands": {
-                                "type": "array",
-                                "items": {"type": "string"},
-                                "description": "List of shell commands to execute"
-                            }
+                    "function": {
+                        "name": "execute_command",
+                        "description": "Execute a shell command to navigate or explore the filesystem",
+                        "parameters": {
+                            "type": "object",
+                            "properties": {
+                                "commands": {
+                                    "type": "array",
+                                    "items": {"type": "string"},
+                                    "description": "List of shell commands to execute"
+                                }
+                            },
+                            "required": ["commands"],
+                            "additionalProperties": False
                         },
-                        "required": ["commands"],
-                        "additionalProperties": False
+                        "strict": True
                     }
                 }
             ]
@@ -290,26 +298,8 @@ class AgentCLI:
                     )
                 
                     # Extract assistant message content
-                    message_content = response.choices[0].message.content
-                
-                    # Create assistant message
-                    assistant_message = {
-                        "role": "assistant",
-                        "content": message_content or ""
-                    }
-                
-                    # Add function calls if present
-                    if hasattr(response.choices[0].message, 'tool_calls') and response.choices[0].message.tool_calls:
-                        tool_calls = []
-                        for tool_call in response.choices[0].message.tool_calls:
-                            tool_calls.append({
-                                "id": tool_call.id,
-                                "function": {
-                                    "name": tool_call.function.name,
-                                    "arguments": tool_call.function.arguments
-                                }
-                            })
-                        assistant_message["tool_calls"] = tool_calls
+                    assistant_message = response.choices[0].message
+                    
                 else:
                     # Ollama implementation - unchanged
                     response = chat(
@@ -333,7 +323,10 @@ class AgentCLI:
             
                 # If there are no tool calls, it's the final response
                 if not has_tool_calls:
-                    final_response = assistant_message.get("content", "")
+                    if self.provider == "openai":
+                        final_response = getattr(assistant_message, "content", "")
+                    else:
+                        final_response = assistant_message.get("content", "")
                     # Filter <think> tags
                     final_response = re.sub(r'<think>[\s\S]*?</think>', '', final_response).strip()
                 
