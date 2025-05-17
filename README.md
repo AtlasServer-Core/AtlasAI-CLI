@@ -56,7 +56,7 @@ pip install atlasserver atlasai-cli
 atlasai ai setup --provider ollama --model llama3:8b
 
 # Setup with OpenAI (cloud)
-atlasai ai setup --provider openai --model gpt-4 --api-key YOUR_API_KEY
+atlasai ai setup --provider openai --model gpt-4.1 --api-key YOUR_API_KEY
 ```
 
 ### Project analysis:
