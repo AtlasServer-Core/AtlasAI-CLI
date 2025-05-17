@@ -106,5 +106,5 @@ AtlasAI-CLI is distributed under the [Apache 2.0 license](https://claude.ai/chat
 
 ---
 
-💻 **Fast deploy. No cloud. Just code.**  
+⚡💻 **Your intelligent, easy-to-use terminal**  
 *From developers to developers.*
