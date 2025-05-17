@@ -83,7 +83,11 @@ atlasserver ai suggest ~/path/to/my-project
 
 ## Demo
 
-![Demo de video](https://res.cloudinary.com/dmtomxyvm/video/upload/v1747453948/qrimbyvcqxabrjy2iqqc.mp4)
+<video controls width="640" poster="https://res.cloudinary.com/dmtomxyvm/video/upload/v1747453948/qrimbyvcqxabrjy2iqqc.jpg">
+  <source src="https://res.cloudinary.com/dmtomxyvm/video/upload/v1747453948/qrimbyvcqxabrjy2iqqc.mp4" type="video/mp4">
+  Tu navegador no soporta la etiqueta de video.
+</video>
+
 
 
 ## Compatibility
