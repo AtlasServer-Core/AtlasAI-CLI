@@ -83,7 +83,7 @@ atlasserver ai suggest ~/path/to/my-project
 
 ## Demo
 
-https://res.cloudinary.com/dmtomxyvm/video/upload/f_auto:video,q_auto/qrimbyvcqxabrjy2iqqc
+![Demo de video](https://res.cloudinary.com/dmtomxyvm/video/upload/v1747453948/qrimbyvcqxabrjy2iqqc.mp4)
 
 
 ## Compatibility
