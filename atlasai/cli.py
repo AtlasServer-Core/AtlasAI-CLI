@@ -264,11 +264,133 @@ def ai_suggest_command(app_directory, stream, interactive, debug, language):
         import traceback
         console.print(Syntax(traceback.format_exc(), "python", theme="monokai"))
 
+@cli.command("query")
+@click.option("--query", "-q", required=True, help="Query for the AI assistant")
+@click.option("--stream/--no-stream", default=True, help="Show response in real-time")
+@click.option("--debug/--no-debug", default=False, help="Show debug information")
+@click.option("--language", type=click.Choice(["en", "es"]), default="en",
+              help="Response language (English or Spanish)")
+def query_command(query, stream, debug, language):
+    """Make a general query to the AI assistant."""
+    process_ai_query(query, stream, debug, language)
+
+def process_ai_query(query, stream=True, debug=False, language="en"):
+    """Process an AI query with the given parameters."""
+    try:
+        # Load AI configuration
+        from atlasai.ai.ai_cli import AtlasServerAICLI
+        ai_cli = AtlasServerAICLI()
+        configured_model = ai_cli.ai_config.get("model", "qwen3:8b")
+        
+        console.print(f"[bold cyan]🤖 Using AI model:[/] [blue]{configured_model}[/]")
+        
+        # Check connection depending on provider
+        if ai_cli.ai_config.get("provider", "ollama") == "ollama":
+            import requests
+            try:
+                with console.status("[bold blue]Connecting to Ollama server...[/]", spinner="dots"):
+                    response = requests.get("http://localhost:11434/api/version", timeout=2)
+        
+                if response.status_code != 200:
+                    console.print("[bold red]❌ Error: Could not connect to Ollama server[/]")
+                    return
+                else:
+                    if debug:
+                        console.print(Panel.fit(
+                        f"Version: {response.json().get('version', 'unknown')}",
+                        title="[bold green]✅ Connected to Ollama[/]",
+                        border_style="green"
+                    ))
+            except Exception as e:
+                console.print("[bold red]❌ Error: Ollama server is not running[/]")
+                console.print(f"   [italic]{str(e)}[/]")
+                console.print("   Run [bold]'ollama serve'[/] or ensure the Ollama service is running.")
+                return
+        elif ai_cli.ai_config.get("provider") == "openai":
+            # Verify API key exists
+            if not ai_cli.ai_config.get("api_key"):
+                console.print("[bold red]❌ Error: No API key configured for OpenAI[/]")
+                console.print("   Run [bold]'atlasai ai setup --provider openai --api-key YOUR_API_KEY'[/]")
+                return
+    
+            console.print(Panel.fit(
+                "Using OpenAI for AI services",
+                title="[bold green]✅ OpenAI configured[/]",
+                border_style="green"
+            ))
+        
+        # Initialize general agent
+        from atlasai.ai.general_agent import GeneralAgent
+        agent = GeneralAgent(
+            model=configured_model, 
+            provider=ai_cli.ai_config.get("provider", "ollama"),
+            api_key=ai_cli.ai_config.get("api_key"),
+            stream=stream, 
+            language=language
+        )
+        
+        console.print(Panel(
+            f"[cyan]Query:[/] [bold]{query}[/]",
+            title="[bold blue]🔍 AI Query[/]",
+            border_style="blue"
+        ))
+        
+        # Execute query with or without streaming
+        if stream:
+            full_response_text = []
+            
+            def collect_response(chunk):
+                full_response_text.append(chunk)
+                console.print(chunk, end="", highlight=False)
+            
+            # Execute with streaming
+            response = asyncio.run(agent.process_query(
+                query, 
+                callback=collect_response
+            ))
+            
+            # If response is empty but we have text, use it
+            if not response and full_response_text:
+                response = ''.join(full_response_text)
+            console.print("\n")
+        else:
+            # Execute without streaming
+            with console.status("[bold blue]Processing query...[/]", spinner="dots"):
+                response = asyncio.run(agent.process_query(query))
+        
+        # Show complete response in debug mode
+        if debug:
+            console.print("\n[bold blue]🔧 DEBUG - Complete response:[/]")
+            console.print(Syntax(response, "markdown", theme="monokai", line_numbers=True))
+        
+    except Exception as e:
+        console.print(f"[bold red]❌ Error during query:[/] {str(e)}")
+        import traceback
+        console.print(Syntax(traceback.format_exc(), "python", theme="monokai"))
+
+
 cli.add_command(ai)
 
 def main():
     """Main entry point for the CLI."""
-    cli()
+    # Check if using pattern atlasai --query "..."
+    import sys
+    if len(sys.argv) >= 3 and sys.argv[1] == "--query":
+        # Direct invocation with --query flag
+        query = sys.argv[2]
+        language = "en"
+        
+        # Check if --language is specified
+        for i in range(3, len(sys.argv)):
+            if sys.argv[i] == "--language" and i + 1 < len(sys.argv):
+                language = sys.argv[i + 1]
+                break
+        
+        # Process the query directly
+        process_ai_query(query, stream=True, debug=False, language=language)
+    else:
+        # Normal CLI behavior using Click
+        cli()
 
 if __name__ == "__main__":
     main()
