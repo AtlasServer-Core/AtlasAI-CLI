@@ -22,7 +22,10 @@ class AgentCLI:
         self.stream = stream
         self.language = language
         self.system_prompt = system_prompt or self._get_default_system_prompt()
+        
+        # Initialize the OpenAI client only when needed
         if self.provider == "openai":
+            assert api_key is not None, "API key is required to use OpenAI"
             self.client = OpenAI(api_key=self.api_key)
         
     def _get_default_system_prompt(self) -> str:
@@ -149,7 +152,7 @@ class AgentCLI:
                     callback(f"[bold red]❌ {error_msg}[/bold red]")
                 return error_msg
         
-            # Configure tools
+            # Configure tools with correct format for OpenAI
             tools = [
                 {
                     "type": "function",
@@ -205,12 +208,21 @@ class AgentCLI:
             # Check if model supports tools based on provider
             try:
                 if self.provider == "openai":
+                    # Validate that client exists
+                    assert hasattr(self, 'client') and self.client is not None, "OpenAI client not initialized"
+                    
+                    # Test function support
                     test_response = self.client.chat.completions.create(
                         model=self.model,
                         messages=[{"role": "user", "content": "Test tools support"}],
                         tools=tools
                     )
+                    
+                    # Verify valid response
+                    assert hasattr(test_response, 'choices') and len(test_response.choices) > 0, "Invalid response from OpenAI API"
+                    
                 else:
+                    # Ollama implementation - unchanged
                     test_response = chat(
                         model=self.model,
                         messages=[{"role": "user", "content": "Test tools support"}],
@@ -218,13 +230,14 @@ class AgentCLI:
                         stream=False
                     )
             except Exception as e:
+                error_msg = f"Error checking tool support: {str(e)}"
                 if "does not support tools" in str(e) or "400" in str(e):
                     error_msg = f"Model '{self.model}' does not support function calling/tools. Please use a compatible model."
-                    logger.error(error_msg)
-                    if callback:
-                        callback(f"[bold red]❌ {error_msg}[/bold red]\n")
-                    return error_msg
-                
+                logger.error(error_msg)
+                if callback:
+                    callback(f"[bold red]❌ {error_msg}[/bold red]\n")
+                return error_msg
+            
             # Initial message
             if callback:
                 callback(Panel(
@@ -233,7 +246,7 @@ class AgentCLI:
                     border_style="blue"
                 ))
         
-            # Initial message for exploration
+            # Initial exploration message
             prompt = f"""
             I need you to thoroughly analyze the project in this directory: {project_dir}
         
@@ -255,7 +268,7 @@ class AgentCLI:
                 {"role": "user", "content": prompt}
             ]
         
-            # Maximum iterations
+            # Maximum iterations to prevent infinite loops
             max_iterations = 10
         
             # Main analysis loop
@@ -269,55 +282,23 @@ class AgentCLI:
             
                 # Call the model based on provider
                 if self.provider == "openai":
-                    # Convert messages to OpenAI format if needed
-                    openai_messages = []
-                    for msg in messages:
-                        if msg["role"] == "system" or msg["role"] == "user" or msg["role"] == "assistant":
-                            # Copy message directly if it doesn't have tool calls
-                            if "tool_calls" not in msg:
-                                openai_messages.append(msg)
-                            else:
-                                # Convert tool calls to OpenAI format
-                                assistant_msg = {"role": "assistant", "content": msg.get("content", "")}
-                                if "tool_calls" in msg:
-                                    tool_calls = []
-                                    for tool_call in msg["tool_calls"]:
-                                        tool_calls.append({
-                                            "id": tool_call["id"],
-                                            "type": "function",
-                                            "function": {
-                                                "name": tool_call["function"]["name"],
-                                                "arguments": tool_call["function"]["arguments"]
-                                            }
-                                        })
-                                    assistant_msg["tool_calls"] = tool_calls
-                                openai_messages.append(assistant_msg)
-                        elif msg["role"] == "tool":
-                            # Convert tool response
-                            openai_messages.append({
-                                "role": "tool",
-                                "content": msg["content"],
-                                "tool_call_id": msg["tool_call_id"],
-                                "name": msg.get("name", "")  # Optional in OpenAI
-                            })
-                
-                    # Call OpenAI API
+                    # Use chat.completions API for OpenAI function calling
                     response = self.client.chat.completions.create(
                         model=self.model,
-                        messages=openai_messages,
+                        messages=messages,
                         tools=tools
                     )
                 
-                    # Extract response
+                    # Extract assistant message content
                     message_content = response.choices[0].message.content
                 
-                    # Create assistant message in standard format
+                    # Create assistant message
                     assistant_message = {
                         "role": "assistant",
                         "content": message_content or ""
                     }
                 
-                    # Add tool calls if present
+                    # Add function calls if present
                     if hasattr(response.choices[0].message, 'tool_calls') and response.choices[0].message.tool_calls:
                         tool_calls = []
                         for tool_call in response.choices[0].message.tool_calls:
@@ -330,7 +311,7 @@ class AgentCLI:
                             })
                         assistant_message["tool_calls"] = tool_calls
                 else:
-                    # Call Ollama API
+                    # Ollama implementation - unchanged
                     response = chat(
                         model=self.model,
                         messages=messages,
@@ -342,9 +323,13 @@ class AgentCLI:
                 # Check if the assistant message has tool calls
                 has_tool_calls = False
                 if self.provider == "openai":
-                    has_tool_calls = hasattr(response.choices[0].message, 'tool_calls') and response.choices[0].message.tool_calls
+                    has_tool_calls = (hasattr(response.choices[0].message, 'tool_calls') and 
+                                     response.choices[0].message.tool_calls and 
+                                     len(response.choices[0].message.tool_calls) > 0)
                 else:
-                    has_tool_calls = "tool_calls" in assistant_message and assistant_message["tool_calls"]
+                    has_tool_calls = ("tool_calls" in assistant_message and 
+                                     assistant_message["tool_calls"] and 
+                                     len(assistant_message["tool_calls"]) > 0)
             
                 # If there are no tool calls, it's the final response
                 if not has_tool_calls:
@@ -366,10 +351,13 @@ class AgentCLI:
                                 ))
                             else:
                                 callback(f"\n[bold green]Analysis Complete[/bold green]\n{final_response}\n")
-                        except:
+                        except json.JSONDecodeError:
                             callback(f"\n[bold green]Analysis Complete[/bold green]\n{final_response}\n")
                 
                     return final_response
+            
+                # Add assistant message to history
+                messages.append(assistant_message)
             
                 # Process tool calls
                 if self.provider == "openai":
@@ -379,9 +367,6 @@ class AgentCLI:
             
                 if not tool_calls:
                     break  # Exit if there are no tools to call
-            
-                # Add assistant message to history
-                messages.append(assistant_message)
             
                 # Process each tool call
                 for tool_call in tool_calls:
@@ -395,16 +380,70 @@ class AgentCLI:
                         tool_name = tool_call.get('function', {}).get('name')
                         arguments_value = tool_call.get('function', {}).get('arguments', '{}')
                 
+                    # Validate tool name
+                    valid_tools = ["list_directory", "read_file", "execute_command"]
+                    if tool_name not in valid_tools:
+                        error_msg = f"Unknown tool: '{tool_name}'"
+                        logger.error(error_msg)
+                        
+                        # Add error as tool result
+                        if self.provider == "openai":
+                            messages.append({
+                                "role": "tool",
+                                "tool_call_id": tool_id,
+                                "content": error_msg
+                            })
+                        else:
+                            messages.append({
+                                "role": "tool",
+                                "tool_call_id": tool_id,
+                                "name": tool_name,
+                                "content": error_msg
+                            })
+                        continue
+                
                     # Parse arguments
                     try:
                         if isinstance(arguments_value, dict):
                             arguments = arguments_value
                         else:
                             arguments = json.loads(arguments_value)
+                            
+                        # Validate arguments based on tool
+                        if tool_name == "list_directory":
+                            assert "directory" in arguments, "Missing 'directory' argument"
+                            assert isinstance(arguments["directory"], str), "'directory' argument must be a string"
+                        elif tool_name == "read_file":
+                            assert "file_path" in arguments, "Missing 'file_path' argument"
+                            assert isinstance(arguments["file_path"], str), "'file_path' argument must be a string"
+                        elif tool_name == "execute_command":
+                            assert "commands" in arguments, "Missing 'commands' argument"
+                            assert isinstance(arguments["commands"], list), "'commands' argument must be a list"
+                            assert all(isinstance(cmd, str) for cmd in arguments["commands"]), "All commands must be strings"
+                            
                     except json.JSONDecodeError:
                         error_msg = f"Error parsing tool arguments: {arguments_value}"
                         logger.error(error_msg)
                     
+                        # Add error as tool result
+                        if self.provider == "openai":
+                            messages.append({
+                                "role": "tool",
+                                "tool_call_id": tool_id,
+                                "content": error_msg
+                            })
+                        else:
+                            messages.append({
+                                "role": "tool",
+                                "tool_call_id": tool_id,
+                                "name": tool_name,
+                                "content": error_msg
+                            })
+                        continue
+                    except AssertionError as e:
+                        error_msg = f"Error in arguments: {str(e)}"
+                        logger.error(error_msg)
+                        
                         # Add error as tool result
                         if self.provider == "openai":
                             messages.append({
@@ -436,7 +475,7 @@ class AgentCLI:
                         # Format results for display
                         if callback:
                             if tool_name == "list_directory":
-                            # Format directory listing as a table
+                                # Format directory listing as a table
                                 dir_table = self._format_directory_output(result)
                                 callback(Panel(
                                     dir_table,
@@ -465,7 +504,7 @@ class AgentCLI:
                                     border_style="cyan"
                                 ))
                     
-                        # Add result to the message history
+                        # Add result to message history - correct format for OpenAI
                         if self.provider == "openai":
                             messages.append({
                                 "role": "tool",
