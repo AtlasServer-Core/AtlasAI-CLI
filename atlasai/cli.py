@@ -23,17 +23,27 @@ def ai():
     pass
 
 @ai.command("setup")
-@click.option("--provider", type=click.Choice(["ollama"]), default="ollama", 
-              help="AI provider (only ollama in Core)")
-@click.option("--model", default="qwen3:8b", help="Model to use (e.g.: qwen3:8b)")
-def ai_setup(provider, model):
+@click.option("--provider", type=click.Choice(["ollama", "openai"]), default="ollama", 
+              help="AI provider (ollama or openai)")
+@click.option("--model", default="qwen3:8b", help="Model to use (e.g.: qwen3:8b or gpt-4)")
+@click.option("--api-key", help="API key (required for OpenAI)")
+def ai_setup(provider, model, api_key):
     """Configure the AI service for CLI."""
     from atlasai.ai.ai_cli import AtlasServerAICLI
     ai_cli = AtlasServerAICLI()
-    success = ai_cli.setup(provider, model, None)
+    
+    # Verificar API key para OpenAI
+    if provider == "openai" and not api_key:
+        console.print("[bold red]❌ API key is required for OpenAI[/]")
+        return
+        
+    success = ai_cli.setup(provider, model, api_key)
     
     if success:
-        console.print(f"[bold green]✅ AI configuration saved:[/] [blue]{provider}[/] / [blue]{model}[/]")
+        config_info = f"[blue]{provider}[/] / [blue]{model}[/]"
+        if provider == "openai":
+            config_info += " / [blue]API key saved[/]"
+        console.print(f"[bold green]✅ AI configuration saved:[/] {config_info}")
     else:
         console.print("[bold red]❌ Error saving AI configuration[/]")
 
@@ -57,32 +67,50 @@ def ai_suggest_command(app_directory, stream, interactive, debug, language):
         
         console.print(f"[bold cyan]🤖 Using AI model:[/] [blue]{configured_model}[/]")
         
-        # Verify Ollama
-        import requests
-        try:
-            with console.status("[bold blue]Connecting to Ollama server...[/]", spinner="dots"):
-                response = requests.get("http://localhost:11434/api/version", timeout=2)
-            
-            if response.status_code != 200:
-                console.print("[bold red]❌ Error: Could not connect to Ollama server[/]")
-                return
-            else:
-                if debug:
-                    console.print(Panel.fit(
+        if ai_cli.ai_config.get("provider", "ollama") == "ollama":
+            import requests
+            try:
+                with console.status("[bold blue]Connecting to Ollama server...[/]", spinner="dots"):
+                    response = requests.get("http://localhost:11434/api/version", timeout=2)
+        
+                if response.status_code != 200:
+                    console.print("[bold red]❌ Error: Could not connect to Ollama server[/]")
+                    return
+                else:
+                    if debug:
+                        console.print(Panel.fit(
                         f"Version: {response.json().get('version', 'unknown')}",
                         title="[bold green]✅ Connected to Ollama[/]",
                         border_style="green"
                     ))
-        except Exception as e:
-            console.print("[bold red]❌ Error: Ollama server is not running[/]")
-            console.print(f"   [italic]{str(e)}[/]")
-            console.print("   Run [bold]'ollama serve'[/] or ensure the Ollama service is running.")
-            return
+            except Exception as e:
+                console.print("[bold red]❌ Error: Ollama server is not running[/]")
+                console.print(f"   [italic]{str(e)}[/]")
+                console.print("   Run [bold]'ollama serve'[/] or ensure the Ollama service is running.")
+                return
+        elif ai_cli.ai_config.get("provider") == "openai":
+            # Verificar que tenemos API key
+            if not ai_cli.ai_config.get("api_key"):
+                console.print("[bold red]❌ Error: No API key configured for OpenAI[/]")
+                console.print("   Run [bold]'atlasai ai setup --provider openai --api-key YOUR_API_KEY'[/]")
+                return
+    
+            console.print(Panel.fit(
+                "Using OpenAI for AI services",
+                title="[bold green]✅ OpenAI configured[/]",
+                border_style="green"
+            ))
         
         if interactive:
             # Use the simplified approach (without complex tools)
             from atlasai.ai.ai_agent import AgentCLI
-            agent = AgentCLI(model=configured_model, stream=stream, language=language)
+            agent = AgentCLI(
+                model=configured_model, 
+                provider=ai_cli.ai_config.get("provider", "ollama"),
+                api_key=ai_cli.ai_config.get("api_key"),
+                stream=stream, 
+                language=language
+            )
             
             console.print(Panel(
                 f"[cyan]Directory:[/] [bold]{app_directory}[/]",

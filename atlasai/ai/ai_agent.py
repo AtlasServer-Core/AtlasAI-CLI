@@ -5,6 +5,7 @@ import json
 from typing import Dict, Any, Optional, Callable
 
 from ollama import chat
+from openai import OpenAI
 
 from atlasai.tools import list_directory, read_file
 
@@ -13,19 +14,16 @@ logger = logging.getLogger(__name__)
 class AgentCLI:
     """AI Agent for command line operations."""
     
-    def __init__(self, model="codellama:7b", stream=False, system_prompt=None, language="en"):
-        """Initialize the AI Agent.
-        
-        Args:
-            model: The Ollama model to use
-            stream: Whether to stream responses
-            system_prompt: Custom system prompt
-            language: Response language (en/es)
-        """
+    def __init__(self, model="codellama:7b", provider="ollama", api_key=None, stream=False, system_prompt=None, language="en"):
+        """Initialize the AI Agent."""
         self.model = model
+        self.provider = provider
+        self.api_key = api_key
         self.stream = stream
         self.language = language
         self.system_prompt = system_prompt or self._get_default_system_prompt()
+        if self.provider == "openai":
+            self.client = OpenAI(api_key=self.api_key)
         
     def _get_default_system_prompt(self) -> str:
         """Get the default system prompt."""
@@ -137,20 +135,12 @@ class AgentCLI:
             return content
     
     async def analyze_project(self, project_dir: str, callback: Optional[Callable[[str], None]] = None) -> str:
-        """Analyze a project directory using tools to explore files.
-        
-        Args:
-            project_dir: Path to the project directory
-            callback: Optional callback for streaming output
-            
-        Returns:
-            Analysis result as a string
-        """
+        """Analyze a project directory using tools to explore files."""
         try:
             from rich.console import Console
             from rich.panel import Panel
             console = Console()
-            
+        
             # Verify directory exists
             if not os.path.isdir(project_dir):
                 error_msg = f"Directory '{project_dir}' does not exist"
@@ -158,79 +148,83 @@ class AgentCLI:
                 if callback:
                     callback(f"[bold red]❌ {error_msg}[/bold red]")
                 return error_msg
-            
+        
             # Configure tools
             tools = [
                 {
                     "type": "function",
-                    "function": {
-                        "name": "list_directory",
-                        "description": "List files and folders in a directory",
-                        "parameters": {
-                            "type": "object",
-                            "properties": {
-                                "directory": {
-                                    "type": "string",
-                                    "description": "Path to the directory to list"
-                                }
+                    "name": "list_directory",
+                    "description": "List files and folders in a directory",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "directory": {
+                                "type": "string",
+                                "description": "Path to the directory to list"
                             }
-                        }
+                        },
+                        "required": ["directory"],
+                        "additionalProperties": False
                     }
                 },
                 {
                     "type": "function",
-                    "function": {
-                        "name": "read_file",
-                        "description": "Read the contents of a file",
-                        "parameters": {
-                            "type": "object",
-                            "properties": {
-                                "file_path": {
-                                    "type": "string",
-                                    "description": "Path to the file to read"
-                                }
-                            },
-                            "required": ["file_path"]
-                        }
+                    "name": "read_file",
+                    "description": "Read the contents of a file",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "file_path": {
+                                "type": "string",
+                                "description": "Path to the file to read"
+                            }
+                        },
+                        "required": ["file_path"],
+                        "additionalProperties": False
                     }
                 },
                 {
                     "type": "function",
-                    "function": {
-                        "name": "execute_command",
-                        "description": "Execute a shell command to navigate or explore the filesystem",
-                        "parameters": {
-                            "type": "object",
-                            "properties": {
-                                "commands": {
-                                    "type": "array",
-                                    "items": {"type": "string"},
-                                    "description": "List of shell commands to execute"
-                                }
-                            },
-                            "required": ["commands"]
-                        }
+                    "name": "execute_command",
+                    "description": "Execute a shell command to navigate or explore the filesystem",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "commands": {
+                                "type": "array",
+                                "items": {"type": "string"},
+                                "description": "List of shell commands to execute"
+                            }
+                        },
+                        "required": ["commands"],
+                        "additionalProperties": False
                     }
                 }
             ]
-            
-            # Check if model supports tools
+        
+            # Check if model supports tools based on provider
             try:
-                # Verify if the model supports tools with a simple test
-                test_response = chat(
-                    model=self.model,
-                    messages=[{"role": "user", "content": "Test tools support"}],
-                    tools=tools,
-                    stream=False
-                )
+                if self.provider == "openai":
+                    test_response = self.client.chat.completions.create(
+                        model=self.model,
+                        messages=[{"role": "user", "content": "Test tools support"}],
+                        tools=tools
+                    )
+                else:
+                    test_response = chat(
+                        model=self.model,
+                        messages=[{"role": "user", "content": "Test tools support"}],
+                        tools=tools,
+                        stream=False
+                    )
             except Exception as e:
                 if "does not support tools" in str(e) or "400" in str(e):
-                    error_msg = f"Model '{self.model}' does not support function calling/tools. Please use a compatible model like 'qwen3:8b' or 'codellama:7b'."
+                    error_msg = f"Model '{self.model}' does not support function calling/tools. Please use a compatible model."
                     logger.error(error_msg)
                     if callback:
                         callback(f"[bold red]❌ {error_msg}[/bold red]\n")
                     return error_msg
-                    
+                
             # Initial message
             if callback:
                 callback(Panel(
@@ -238,32 +232,32 @@ class AgentCLI:
                     title="🔍 Project Explorer",
                     border_style="blue"
                 ))
-            
+        
             # Initial message for exploration
             prompt = f"""
             I need you to thoroughly analyze the project in this directory: {project_dir}
-            
+        
             Your first steps should be:
             1. List the directory structure to understand the project organization
             2. Find and READ the main Python files (especially app/main.py if it exists)
             3. Read requirements.txt or package.json if they exist
-            
+        
             Use the available tools to explore directories and read files.
             DO NOT make assumptions about file contents - READ key files first.
-            
+        
             After exploring and reading key files, determine the project type and suggest
             the optimal deployment command for AtlasServer.
             """
-            
+        
             # Configure messages
             messages = [
                 {"role": "system", "content": self.system_prompt},
                 {"role": "user", "content": prompt}
             ]
-            
+        
             # Maximum iterations
             max_iterations = 10
-            
+        
             # Main analysis loop
             for iteration in range(max_iterations):
                 if callback:
@@ -272,21 +266,92 @@ class AgentCLI:
                         title="🔄 Analysis Progress",
                         border_style="cyan"
                     ))
+            
+                # Call the model based on provider
+                if self.provider == "openai":
+                    # Convert messages to OpenAI format if needed
+                    openai_messages = []
+                    for msg in messages:
+                        if msg["role"] == "system" or msg["role"] == "user" or msg["role"] == "assistant":
+                            # Copy message directly if it doesn't have tool calls
+                            if "tool_calls" not in msg:
+                                openai_messages.append(msg)
+                            else:
+                                # Convert tool calls to OpenAI format
+                                assistant_msg = {"role": "assistant", "content": msg.get("content", "")}
+                                if "tool_calls" in msg:
+                                    tool_calls = []
+                                    for tool_call in msg["tool_calls"]:
+                                        tool_calls.append({
+                                            "id": tool_call["id"],
+                                            "type": "function",
+                                            "function": {
+                                                "name": tool_call["function"]["name"],
+                                                "arguments": tool_call["function"]["arguments"]
+                                            }
+                                        })
+                                    assistant_msg["tool_calls"] = tool_calls
+                                openai_messages.append(assistant_msg)
+                        elif msg["role"] == "tool":
+                            # Convert tool response
+                            openai_messages.append({
+                                "role": "tool",
+                                "content": msg["content"],
+                                "tool_call_id": msg["tool_call_id"],
+                                "name": msg.get("name", "")  # Optional in OpenAI
+                            })
                 
-                # Call the model (always without streaming for tools)
-                response = chat(
-                    model=self.model,
-                    messages=messages,
-                    tools=tools,
-                    stream=False  # Important: use False for tools
-                )
+                    # Call OpenAI API
+                    response = self.client.chat.completions.create(
+                        model=self.model,
+                        messages=openai_messages,
+                        tools=tools
+                    )
                 
+                    # Extract response
+                    message_content = response.choices[0].message.content
+                
+                    # Create assistant message in standard format
+                    assistant_message = {
+                        "role": "assistant",
+                        "content": message_content or ""
+                    }
+                
+                    # Add tool calls if present
+                    if hasattr(response.choices[0].message, 'tool_calls') and response.choices[0].message.tool_calls:
+                        tool_calls = []
+                        for tool_call in response.choices[0].message.tool_calls:
+                            tool_calls.append({
+                                "id": tool_call.id,
+                                "function": {
+                                    "name": tool_call.function.name,
+                                    "arguments": tool_call.function.arguments
+                                }
+                            })
+                        assistant_message["tool_calls"] = tool_calls
+                else:
+                    # Call Ollama API
+                    response = chat(
+                        model=self.model,
+                        messages=messages,
+                        tools=tools,
+                        stream=False
+                    )
+                    assistant_message = response['message']
+            
+                # Check if the assistant message has tool calls
+                has_tool_calls = False
+                if self.provider == "openai":
+                    has_tool_calls = hasattr(response.choices[0].message, 'tool_calls') and response.choices[0].message.tool_calls
+                else:
+                    has_tool_calls = "tool_calls" in assistant_message and assistant_message["tool_calls"]
+            
                 # If there are no tool calls, it's the final response
-                if 'tool_calls' not in response.get('message', {}):
-                    final_response = response['message'].get('content', "")
+                if not has_tool_calls:
+                    final_response = assistant_message.get("content", "")
                     # Filter <think> tags
                     final_response = re.sub(r'<think>[\s\S]*?</think>', '', final_response).strip()
-                    
+                
                     if callback:
                         # Try to format as JSON if possible
                         try:
@@ -303,44 +368,59 @@ class AgentCLI:
                                 callback(f"\n[bold green]Analysis Complete[/bold green]\n{final_response}\n")
                         except:
                             callback(f"\n[bold green]Analysis Complete[/bold green]\n{final_response}\n")
-                    
-                    return final_response
                 
+                    return final_response
+            
                 # Process tool calls
-                tool_calls = response['message'].get('tool_calls', [])
+                if self.provider == "openai":
+                    tool_calls = response.choices[0].message.tool_calls
+                else:
+                    tool_calls = assistant_message.get("tool_calls", [])
+            
                 if not tool_calls:
                     break  # Exit if there are no tools to call
-                
-                # Add assistant message
-                messages.append(response['message'])
-                
-                # Process each tool
+            
+                # Add assistant message to history
+                messages.append(assistant_message)
+            
+                # Process each tool call
                 for tool_call in tool_calls:
-                    tool_name = tool_call.get('function', {}).get('name')
-                    tool_id = tool_call.get('id')
-                    
+                    # Extract tool information based on provider
+                    if self.provider == "openai":
+                        tool_id = tool_call.id
+                        tool_name = tool_call.function.name
+                        arguments_value = tool_call.function.arguments
+                    else:
+                        tool_id = tool_call.get('id')
+                        tool_name = tool_call.get('function', {}).get('name')
+                        arguments_value = tool_call.get('function', {}).get('arguments', '{}')
+                
                     # Parse arguments
                     try:
-                        arguments_value = tool_call.get('function', {}).get('arguments', '{}')
                         if isinstance(arguments_value, dict):
-                        # If it's already a dictionary, use it directly
                             arguments = arguments_value
                         else:
-                        # If it's a string, try to parse it
                             arguments = json.loads(arguments_value)
                     except json.JSONDecodeError:
                         error_msg = f"Error parsing tool arguments: {arguments_value}"
                         logger.error(error_msg)
-                        
-                        # Add error as tool result
-                        messages.append({
-                            "role": "tool",
-                            "tool_call_id": tool_id,
-                            "name": tool_name,
-                            "content": error_msg
-                        })
-                        continue
                     
+                        # Add error as tool result
+                        if self.provider == "openai":
+                            messages.append({
+                                "role": "tool",
+                                "tool_call_id": tool_id,
+                                "content": error_msg
+                            })
+                        else:
+                            messages.append({
+                                "role": "tool",
+                                "tool_call_id": tool_id,
+                                "name": tool_name,
+                                "content": error_msg
+                            })
+                        continue
+                
                     if callback:
                         tool_info = json.dumps(arguments, indent=2)
                         callback(Panel(
@@ -348,15 +428,15 @@ class AgentCLI:
                             title="🛠️ Tool Execution",
                             border_style="yellow"
                         ))
-                    
+                
                     # Execute tool
                     try:
                         result = await self._execute_tool(tool_name, arguments, project_dir)
-                        
+                    
                         # Format results for display
                         if callback:
                             if tool_name == "list_directory":
-                                # Format directory listing as a table
+                            # Format directory listing as a table
                                 dir_table = self._format_directory_output(result)
                                 callback(Panel(
                                     dir_table,
@@ -384,36 +464,50 @@ class AgentCLI:
                                     title="🔹 Command Result",
                                     border_style="cyan"
                                 ))
-                        
-                        # Add result to the message
-                        messages.append({
-                            "role": "tool",
-                            "tool_call_id": tool_id,
-                            "name": tool_name,
-                            "content": result
-                        })
+                    
+                        # Add result to the message history
+                        if self.provider == "openai":
+                            messages.append({
+                                "role": "tool",
+                                "tool_call_id": tool_id,
+                                "content": result
+                            })
+                        else:
+                            messages.append({
+                                "role": "tool",
+                                "tool_call_id": tool_id,
+                                "name": tool_name,
+                                "content": result
+                            })
                     except Exception as e:
                         error_msg = f"Error executing tool: {str(e)}"
                         logger.error(error_msg)
-                        
+                    
                         # Add error as result
-                        messages.append({
-                            "role": "tool",
-                            "tool_call_id": tool_id,
-                            "name": tool_name,
-                            "content": error_msg
-                        })
-                        
+                        if self.provider == "openai":
+                            messages.append({
+                                "role": "tool",
+                                "tool_call_id": tool_id,
+                                "content": error_msg
+                            })
+                        else:
+                            messages.append({
+                                "role": "tool",
+                                "tool_call_id": tool_id,
+                                "name": tool_name,
+                                "content": error_msg
+                            })
+                    
                         if callback:
                             callback(Panel(
                                 f"[bold red]{error_msg}[/bold red]",
                                 title="❌ Error",
                                 border_style="red"
                             ))
-            
-            # If we get here, we've reached the maximum iterations
+        
+            # If we reach here, we've reached the maximum iterations
             return "Analysis has exceeded the maximum number of iterations without reaching a conclusion."
-            
+        
         except Exception as e:
             error_msg = f"Error during analysis: {str(e)}"
             logger.error(error_msg)

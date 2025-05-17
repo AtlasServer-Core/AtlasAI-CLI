@@ -44,12 +44,12 @@ class AtlasServerAICLI:
     
     def setup(self, provider: str, model: str, api_key: Optional[str] = None) -> bool:
         """Configure the AI service.
-        
+    
         Args:
             provider: AI service provider
             model: Model identifier
             api_key: API key for the service (if required)
-            
+        
         Returns:
             True if configuration was saved successfully, False otherwise
         """
@@ -57,10 +57,10 @@ class AtlasServerAICLI:
             "provider": provider,
             "model": model,
         }
-        
+    
         if api_key:
             self.ai_config["api_key"] = api_key
-            
+        
         try:
             os.makedirs(os.path.dirname(self.config_path), exist_ok=True)
             with open(self.config_path, "w") as f:
