@@ -92,7 +92,7 @@ atlasserver ai suggest ~/path/to/my-project
 
 AtlasAI-CLI works best with:
 - Post-Llama 3 models for Ollama
-- GPT-3.5 or higher for OpenAI
+- GPT-4o or higher for OpenAI
 
 ## Contributions
 
