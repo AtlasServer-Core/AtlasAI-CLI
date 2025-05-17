@@ -83,9 +83,8 @@ atlasserver ai suggest ~/path/to/my-project
 
 ## Demo
 
-<video width="720" height="480" controls>
-  <source src="https://res.cloudinary.com/dmtomxyvm/video/upload/v1747453948/qrimbyvcqxabrjy2iqqc.mp4" type="video/mp4">
-</video>
+"https://res.cloudinary.com/dmtomxyvm/video/upload/v1747453948/qrimbyvcqxabrjy2iqqc.mp4"
+
 
 ## Compatibility
 
