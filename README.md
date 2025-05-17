@@ -2,6 +2,8 @@
 
 **AtlasAI-CLI** is an AI-powered command line tool that analyzes projects and recommends optimal deployment configurations. It works as an independent complement for AtlasServer-Core or as a standalone tool.
 
+![DemoAI](https://res.cloudinary.com/dmtomxyvm/image/upload/v1747508948/qndkowec6jpmuifmk6ys.gif)
+
 ## Why a separate package?
 
 AtlasAI-CLI was born as part of [AtlasServer-Core v0.2.5](https://github.com/AtlasServer-Core/AtlasServer-Core/releases/tag/v0.2.5), but is now distributed as an independent package to:
