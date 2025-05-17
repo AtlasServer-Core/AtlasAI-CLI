@@ -4,7 +4,7 @@
 
 ## Why a separate package?
 
-AtlasAI-CLI was born as part of [[AtlasServer-Core v0.2.5](https://github.com/AtlasServer-Core/AtlasServer-Core/releases/tag/v0.2.5)](https://github.com/AtlasServer-Core/AtlasServer-Core/releases/tag/v0.2.5), but is now distributed as an independent package to:
+AtlasAI-CLI was born as part of [AtlasServer-Core v0.2.5](https://github.com/AtlasServer-Core/AtlasServer-Core/releases/tag/v0.2.5), but is now distributed as an independent package to:
 
 - **Reduce dependencies**: AtlasServer-Core stays lighter
 - **Better performance**: Faster installation when AI functions aren't needed
