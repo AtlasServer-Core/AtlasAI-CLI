@@ -2,6 +2,8 @@
 import logging
 from typing import Optional, Callable
 from openai import OpenAI
+from anthropic import Anthropic
+
 
 logger = logging.getLogger(__name__)
 
@@ -101,6 +103,85 @@ class OpenAIService(AIService):
             logger.error(error_msg)
             callback(error_msg)
             raise RuntimeError(f"Error generating streaming response with OpenAI: {str(e)}")
+
+class AnthropicService(AIService):
+    """AI service using Anthropic models."""
+    def __init__(self, model: str, api_key: str):
+        super().__init__(model)
+
+        assert api_key is not None and api_key.strip() != "", "Anthropic API key cannot be empty"
+        assert model is not None and model.strip() != "", "Model name cannot be empty"
+
+        self.client = Anthropic(api_key=api_key)
+
+    async def generate_response(self, prompt: str, structured_output: bool = False) -> str:
+        assert prompt is not None, "Prompt cannot be None"
+        
+        try:
+            system_prompt = """You are an AI assistant specialized in application deployment.
+                Your task is to analyze code and configurations to suggest deployment strategies.
+                Be precise and provide detailed reasoning for your suggestions."""
+            
+            if structured_output:
+                system_prompt += """ Include a 'reasoning' field in your JSON response that 
+                explains the rationale behind your suggestions in detail."""
+
+            response = self.client.messages.create(
+                model=self.model,
+                messages=[
+                    {
+                        'role': 'system',
+                        'content': system_prompt
+                    },
+                    {
+                        'role': 'user',
+                        'content': prompt
+                    }
+                ]
+            )
+            
+            #assert response.choices and len(response.choices) > 0, "No se recibió respuesta del modelo"
+            return str(response.content)
+        except Exception as e:
+            logger.error(f"Error generating response with Anthropic: {str(e)}")
+            raise RuntimeError(f"Error generating response with Anthropic: {str(e)}")
+        
+    async def generate_response_stream(self, prompt: str, callback: Callable[[str], None]) -> str:
+        assert prompt is not None, "Prompt cannot be None"
+        assert callback is not None, "Callback function cannot be None"
+        
+        try:
+            # Prepare system prompt
+            system_prompt = """You are an AI assistant specialized in application deployment.
+            Your task is to analyze code and configurations to suggest deployment strategies.
+            Be precise and provide detailed reasoning for your suggestions."""
+
+            # Correctly implement streaming with Anthropic
+            response = self.client.messages.create(
+                model=self.model,
+                messages=[
+                    {
+                        'role': 'system',
+                        'content': system_prompt
+                    },
+                    {
+                        'role': 'user',
+                        'content': prompt
+                    }
+                ],
+                stream=True
+            )
+            
+            async for chunk in response.text_stream:
+                if chunk and len(chunk) > 0:
+                    text_chunk = chunk
+                    callback(text_chunk)
+
+        except Exception as e:
+            error_msg = f"Error generating streaming response: {str(e)}"
+            logger.error(error_msg)
+            callback(error_msg)
+            raise RuntimeError(f"Error generating streaming response with Anthropic: {str(e)}")
 
 class OllamaService(AIService):
     """AI service using local Ollama models."""
