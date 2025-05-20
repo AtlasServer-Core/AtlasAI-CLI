@@ -9,6 +9,7 @@ from ollama import chat
 from openai import OpenAI
 
 from atlasai.tools import get_os, search, list_directory, read_file, execute_command
+from atlasai.ai.prompts import BASE_PROMPTS
 
 logger = logging.getLogger(__name__)
 
@@ -27,62 +28,19 @@ class GeneralAgent:
         self.api_key = api_key
         self.stream = stream
         self.language = language
-        self.system_prompt = self._get_system_prompt()
+        general_prompt = BASE_PROMPTS.get_general_agent_prompt(language)
+        advanced_prompt = BASE_PROMPTS.get_advanced_agent_prompt(language)
+        if language == "es":
+            general_prompt = general_prompt.split("IMPORTANT:")[0].strip()
+    
+        self.system_prompt = f"{general_prompt}\n\n{advanced_prompt}"
+
         
         # Initialize OpenAI client only when needed
         if self.provider == "openai":
             self.client = OpenAI(api_key=self.api_key)
         
-    def _get_system_prompt(self) -> str:
-        """Get the system prompt for the general agent."""
-        base_prompt = """You are AtlasAI-CLI, an AI-powered assistant using a real operating system. You are a software expert: few engineers are as talented as you at understanding codebases, analyzing projects, and providing helpful information.
 
-When to Communicate with User:
-- When encountering environment issues
-- When critical information cannot be accessed through available tools
-- When you need user permission to proceed with actions
-
-Approach to Work:
-- Fulfill the user's request using all the tools available to you
-- When encountering difficulties, take time to gather information before concluding a root cause
-- If you're facing environment issues, find a way to continue your work if possible
-- Always consider that issues might be in your approach rather than the environment
-
-Best Practices:
-- When analyzing files, first understand the file's code conventions
-- Mimic existing code style, use existing libraries and utilities, and follow existing patterns
-- NEVER assume that a given library is available unless you've confirmed it
-- When analyzing projects, look at existing components to understand their approach
-
-Information Handling:
-- Use search capabilities to find information when needed
-- Thoroughly explore directories and files to understand project structure
-- Be concise but complete in your explanations
-
-Data Security:
-- Treat code and data as sensitive information 
-- Never commit secrets or keys to any repository
-- Always follow security best practices
-
-I have access to the following tools to help analyze and interact with your system:
-
-- get_os: Get information about the current operating system
-- search: Search the web for information
-- list_directory: View contents of directories
-- read_file: Examine files
-- execute_command: Execute shell commands (read-only safe commands)
-
-I'll carefully analyze your query and decide which tools I need to use to provide the most helpful response. I'll always explain my reasoning and be clear about my process.
-"""
-        
-        # Add language instruction
-        if self.language == "es":
-            base_prompt += """
-
-IMPORTANT: For final reasoning and explanations, provide your analysis in Spanish while keeping technical terms, commands, and code in English. All other interactions with tools and system will remain in English."""
-        
-        return base_prompt
-    
     def _get_available_tools(self) -> List[Dict[str, Any]]:
         """Get the list of available tools."""
         return [
@@ -176,7 +134,65 @@ IMPORTANT: For final reasoning and explanations, provide your analysis in Spanis
                     },
                     "strict": True
                 }
-            }
+            },
+            {
+                    "type": "function",
+                    "function": {
+                        "name": "write_file",
+                        "description": "Create a new file or overwrite an existing one",
+                        "parameters": {
+                            "type": "object",
+                            "properties": {
+                                "file_path": {
+                                    "type": "string",
+                                    "description": "Path to the file to be written"
+                                },
+                                "content": {
+                                    "type": "string",
+                                    "description": "Content to write to the file"
+                                },
+                                "overwrite": {
+                                    "type": "boolean",
+                                    "description": "If True, will overwrite an existing file"
+                                }
+                            },
+                            "required": ["file_path", "content", "overwrite"],
+                            "additionalProperties": False
+                        },
+                        "strict": True
+                    }
+                },
+                {
+                    "type": "function",
+                    "function": {
+                        "name": "edit_file",
+                        "description": "Edit parts of an existing file",
+                        "parameters": {
+                            "type": "object",
+                            "properties": {
+                                "file_path": {
+                                    "type": "string",
+                                    "description": "Path to the file to be edited"
+                                },
+                                "search_text": {
+                                    "type": "string",
+                                    "description": "Text to search for"
+                                },
+                                "replace_text": {
+                                    "type": "string",
+                                    "description": "Replacement text"
+                                },
+                                "regex": {
+                                    "type": "boolean",
+                                    "description": "If True, search_text will be interpreted as a regular expression"
+                                }
+                            },
+                            "required": ["file_path", "search_text", "replace_text", "regex"],
+                            "additionalProperties": False
+                        },
+                        "strict": True
+                    }
+                }
         ]
     
     def _format_directory_output(self, content):
@@ -297,6 +313,7 @@ IMPORTANT: For final reasoning and explanations, provide your analysis in Spanis
                     )
             except Exception as e:
                 error_msg = f"Error checking tool support: {str(e)}"
+                logger.error(error_msg)
                 if "does not support tools" in str(e) or "400" in str(e):
                     error_msg = f"Model '{self.model}' does not support function calling/tools. Please use a compatible model."
                 logger.error(error_msg)
@@ -417,7 +434,7 @@ IMPORTANT: For final reasoning and explanations, provide your analysis in Spanis
                         arguments_value = tool_call.get('function', {}).get('arguments', '{}')
                     
                     # Validate tool name
-                    valid_tools = ["get_os", "search", "list_directory", "read_file", "execute_command"]
+                    valid_tools = ["get_os", "search", "list_directory", "read_file", "execute_command", "write_file", "edit_file"]
                     if tool_name not in valid_tools:
                         error_msg = f"Unknown tool: '{tool_name}'"
                         logger.error(error_msg)
@@ -550,6 +567,18 @@ IMPORTANT: For final reasoning and explanations, provide your analysis in Spanis
                                     title="🔎 Search Results",
                                     border_style="green"
                                 ))
+                            elif tool_name == "write_file" or tool_name == "append_file":
+                                callback(Panel(
+                                    result,
+                                    title=f"✏️ File Operation: {os.path.basename(arguments.get('file_path', ''))}",
+                                    border_style="green"
+                                ))
+                            elif tool_name == "edit_file":
+                                callback(Panel(
+                                result,
+                                title=f"🔄 Edited File: {os.path.basename(arguments.get('file_path', ''))}",
+                                border_style="blue"
+                                ))
                             else:
                                 # Generic result display
                                 max_display = 500
@@ -660,6 +689,44 @@ IMPORTANT: For final reasoning and explanations, provide your analysis in Spanis
                     return "Error: No commands specified to execute"
                 
                 return execute_command(commands)
+
+            elif tool_name == "write_file":
+                file_path = arguments.get("file_path")
+                content = arguments.get("content", "")
+                overwrite = arguments.get("overwrite", False)
+        
+                if not file_path:
+                    return "Error: No se especificó ningún archivo para escribir"
+        
+                # Convertir rutas relativas a absolutas
+                if not os.path.isabs(file_path):
+                    file_path = os.path.abspath(file_path)
+        
+                from atlasai.tools import write_file
+                return write_file(file_path, content, overwrite)
+
+            elif tool_name == "edit_file":
+                file_path = arguments.get("file_path")
+                search_text = arguments.get("search_text")
+                replace_text = arguments.get("replace_text", "")
+                regex = arguments.get("regex", False)
+        
+                if not file_path:
+                    return "Error: No se especificó ningún archivo para editar"
+        
+                if search_text is None:
+                    return "Error: No se especificó el texto a buscar"
+        
+                # Convertir rutas relativas a absolutas
+                if not os.path.isabs(file_path):
+                    file_path = os.path.abspath(file_path)
+        
+                # Verificar que el archivo existe
+                if not os.path.isfile(file_path):
+                    return f"Error: El archivo '{file_path}' no existe"
+        
+                from atlasai.tools import edit_file
+                return edit_file(file_path, search_text, replace_text, regex)
                 
             else:
                 return f"Error: Unknown tool '{tool_name}'"

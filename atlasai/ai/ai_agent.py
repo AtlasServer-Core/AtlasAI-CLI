@@ -210,6 +210,64 @@ class AgentCLI:
                         },
                         "strict": True
                     }
+                },
+                {
+                    "type": "function",
+                    "function": {
+                        "name": "write_file",
+                        "description": "Create a new file or overwrite an existing one",
+                        "parameters": {
+                            "type": "object",
+                            "properties": {
+                                "file_path": {
+                                    "type": "string",
+                                    "description": "Path to the file to be written"
+                                },
+                                "content": {
+                                    "type": "string",
+                                    "description": "Content to write to the file"
+                                },
+                                "overwrite": {
+                                    "type": "boolean",
+                                    "description": "If True, will overwrite an existing file"
+                                }
+                            },
+                            "required": ["file_path", "content", "overwrite"],
+                            "additionalProperties": False
+                        },
+                        "strict": True
+                    }
+                },
+                {
+                    "type": "function",
+                    "function": {
+                        "name": "edit_file",
+                        "description": "Edit parts of an existing file",
+                        "parameters": {
+                            "type": "object",
+                            "properties": {
+                                "file_path": {
+                                    "type": "string",
+                                    "description": "Path to the file to be edited"
+                                },
+                                "search_text": {
+                                    "type": "string",
+                                    "description": "Text to search for"
+                                },
+                                "replace_text": {
+                                    "type": "string",
+                                    "description": "Replacement text"
+                                },
+                                "regex": {
+                                    "type": "boolean",
+                                    "description": "If True, search_text will be interpreted as a regular expression"
+                                }
+                            },
+                            "required": ["file_path", "search_text", "replace_text", "regex"],
+                            "additionalProperties": False
+                        },
+                        "strict": True
+                    }
                 }
             ]
         
@@ -374,7 +432,7 @@ class AgentCLI:
                         arguments_value = tool_call.get('function', {}).get('arguments', '{}')
                 
                     # Validate tool name
-                    valid_tools = ["list_directory", "read_file", "execute_command"]
+                    valid_tools = ["list_directory", "read_file", "execute_command", "write_file", "edit_file"]
                     if tool_name not in valid_tools:
                         error_msg = f"Unknown tool: '{tool_name}'"
                         logger.error(error_msg)
@@ -484,6 +542,18 @@ class AgentCLI:
                                     title=f"📑 File Content: {os.path.basename(file_path)}",
                                     border_style="green"
                                 ))
+                            elif tool_name == "write_file" or tool_name == "append_file":
+                                callback(Panel(
+                                    result,
+                                    title=f"✏️ File Operation: {os.path.basename(arguments.get('file_path', ''))}",
+                                    border_style="green"
+                                ))
+                            elif tool_name == "edit_file":
+                                callback(Panel(
+                                result,
+                                title=f"🔄 Edited File: {os.path.basename(arguments.get('file_path', ''))}",
+                                border_style="blue"
+                                ))
                             else:
                                 # Generic result display
                                 max_display = 500
@@ -587,6 +657,44 @@ class AgentCLI:
                 # Execute in the project directory
                 result = execute_command(commands)
                 return result
+
+            elif tool_name == "write_file":
+                file_path = arguments.get("file_path")
+                content = arguments.get("content", "")
+                overwrite = arguments.get("overwrite", False)
+        
+                if not file_path:
+                    return "Error: No se especificó ningún archivo para escribir"
+        
+                # Convertir rutas relativas a absolutas
+                if not os.path.isabs(file_path):
+                    file_path = os.path.abspath(file_path)
+        
+                from atlasai.tools import write_file
+                return write_file(file_path, content, overwrite)
+
+            elif tool_name == "edit_file":
+                file_path = arguments.get("file_path")
+                search_text = arguments.get("search_text")
+                replace_text = arguments.get("replace_text", "")
+                regex = arguments.get("regex", False)
+        
+                if not file_path:
+                    return "Error: No se especificó ningún archivo para editar"
+        
+                if search_text is None:
+                    return "Error: No se especificó el texto a buscar"
+        
+                # Convertir rutas relativas a absolutas
+                if not os.path.isabs(file_path):
+                    file_path = os.path.abspath(file_path)
+        
+                # Verificar que el archivo existe
+                if not os.path.isfile(file_path):
+                    return f"Error: El archivo '{file_path}' no existe"
+        
+                from atlasai.tools import edit_file
+                return edit_file(file_path, search_text, replace_text, regex)
         
             else:
                 return f"Error: Unknown tool '{tool_name}'"

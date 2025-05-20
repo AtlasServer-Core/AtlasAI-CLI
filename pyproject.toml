@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "atlasai-cli"
-version = "0.2.5"
+version = "0.2.8"
 description = "AI-powered CLI for AtlasServer deployments: suggest, optimize & debug commands"
 readme = "README.md"
 license = { file = "LICENSE" }
@@ -28,7 +28,8 @@ dependencies = [
   "duckduckgo-search",
   "openai-agents",
   "openai",
-  "rich"
+  "rich",
+  "anthropic"
 ]
 
 [project.urls]

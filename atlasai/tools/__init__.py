@@ -1,1 +1,1 @@
-from .tools import get_os, search, list_directory, read_file, execute_command
+from .tools import get_os, search, list_directory, read_file, execute_command, edit_file, write_file, append_file
