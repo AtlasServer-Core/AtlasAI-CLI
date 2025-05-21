@@ -88,7 +88,8 @@ def execute_command(commands: List[str]) -> str:
     """
     try:
         # Limit commands to safe read-only operations
-        safe_commands = ["ls", "dir", "cat", "type", "find", "grep", "head", "tail"]
+        safe_commands = ["ls", "dir", "find", "grep", "cat", "type", "head", "tail", "less", "more", "file", "stat", "du", "df", "wc", "tree", "npm", "npx", "yarn", "pnpm", "node", "nvm",
+        "python", "pip", "pipenv", "poetry", "venv", "conda", "git", "gh", "dotnet", "mvn", "gradle", "cargo", "rustc", "javac", "gcc", "g++","make", "cmake", "bazel", "webpack", "babel", "tsc", "mkdir", "touch", "cp", "mv", "rm", "rmdir"]
         
         # Verify commands are safe
         for cmd in commands:

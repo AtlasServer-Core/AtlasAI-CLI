@@ -368,29 +368,130 @@ def process_ai_query(query, stream=True, debug=False, language="en"):
         import traceback
         console.print(Syntax(traceback.format_exc(), "python", theme="monokai"))
 
+@cli.command("chat")
+@click.option("--model", help="Model to use (defaults to configured model)")
+@click.option("--provider", type=click.Choice(["ollama", "openai"]), 
+              help="AI provider (ollama or openai, defaults to configured provider)")
+@click.option("--api-key", help="API key (required for OpenAI if not configured)")
+@click.option("--language", type=click.Choice(["en", "es"]), default="en",
+              help="Response language (English or Spanish)")
+@click.option("--prompt-level", type=click.Choice(["general", "advanced", "combined"]), 
+              default="general", help="Prompt sophistication level")
+def chat_command(model, provider, api_key, language, prompt_level):
+    """Start an interactive chat session with the AI assistant."""
+    try:
+        # Load configuration
+        from atlasai.ai.ai_cli import AtlasServerAICLI
+        ai_cli = AtlasServerAICLI()
+        
+        # Use configured values if not specified
+        model = model or ai_cli.ai_config.get("model", "qwen3:8b")
+        provider = provider or ai_cli.ai_config.get("provider", "ollama")
+        api_key = api_key or ai_cli.ai_config.get("api_key")
+        
+        console.print(f"[bold cyan]🤖 Using AI model:[/] [blue]{model}[/]")
+        
+        # Check connection based on provider
+        if provider == "ollama":
+            import requests
+            try:
+                with console.status("[bold blue]Connecting to Ollama server...[/]", spinner="dots"):
+                    response = requests.get("http://localhost:11434/api/version", timeout=2)
+            
+                if response.status_code != 200:
+                    console.print("[bold red]❌ Error: Could not connect to Ollama server[/]")
+                    return
+                else:
+                    console.print(Panel.fit(
+                        "Connected to Ollama server",
+                        title="[bold green]✅ Connection Ready[/]",
+                        border_style="green"
+                    ))
+            except Exception as e:
+                console.print("[bold red]❌ Error: Ollama server is not running[/]")
+                console.print(f"   [italic]{str(e)}[/]")
+                console.print("   Run [bold]'ollama serve'[/] or ensure the Ollama service is running.")
+                return
+                
+        elif provider == "openai":
+            # Verify API key exists
+            if not api_key:
+                console.print("[bold red]❌ Error: No API key configured for OpenAI[/]")
+                console.print("   Run [bold]'atlasai ai setup --provider openai --api-key YOUR_API_KEY'[/]")
+                return
+            
+            console.print(Panel.fit(
+                "OpenAI API configured",
+                title="[bold green]✅ Connection Ready[/]",
+                border_style="green"
+            ))
+        
+        # Import and start the interactive chat
+        from atlasai.ai.interactive_agent import start_interactive_cli
+        
+        console.print(Panel(
+            f"Starting interactive chat mode with [bold blue]{model}[/] ({provider})\n"
+            f"Language: [bold]{language}[/], Prompt level: [bold]{prompt_level}[/]\n"
+            "Type [bold green]'exit'[/] or [bold green]'quit'[/] to end the session.",
+            title="[bold blue]🤖 AtlasAI Interactive Chat[/]",
+            border_style="blue"
+        ))
+        
+        # Start the interactive session
+        asyncio.run(start_interactive_cli(
+            model=model,
+            provider=provider,
+            api_key=api_key,
+            language=language,
+            prompt_level=prompt_level
+        ))
+        
+    except Exception as e:
+        from rich.text import Text
+        error_text = Text("❌ Error starting chat: ", style="bold red")
+        error_text.append(str(e))
+        console.print(error_text)
+        import traceback
+        console.print(Syntax(traceback.format_exc(), "python", theme="monokai"))
+
 
 cli.add_command(ai)
 
 def main():
     """Main entry point for the CLI."""
-    # Check if using pattern atlasai --query "..."
+    # Check if using pattern atlasai --query or --chat
     import sys
-    if len(sys.argv) >= 3 and sys.argv[1] == "--query":
-        # Direct invocation with --query flag
-        query = sys.argv[2]
-        language = "en"
-        
-        # Check if --language is specified
-        for i in range(3, len(sys.argv)):
-            if sys.argv[i] == "--language" and i + 1 < len(sys.argv):
-                language = sys.argv[i + 1]
-                break
-        
-        # Process the query directly
-        process_ai_query(query, stream=True, debug=False, language=language)
-    else:
-        # Normal CLI behavior using Click
-        cli()
+    if len(sys.argv) >= 2:
+        if sys.argv[1] == "--query":
+            # Direct invocation with --query flag
+            query = sys.argv[2]
+            language = "en"
+            
+            # Check if --language is specified
+            for i in range(3, len(sys.argv)):
+                if sys.argv[i] == "--language" and i + 1 < len(sys.argv):
+                    language = sys.argv[i + 1]
+                    break
+            
+            # Process the query directly
+            process_ai_query(query, stream=True, debug=False, language=language)
+            return
+        elif sys.argv[1] == "--chat":
+            # Direct invocation with --chat flag
+            language = "en"
+            prompt_level = "general"
+            
+            # Check if options are specified
+            for i in range(2, len(sys.argv)):
+                if sys.argv[i] == "--language" and i + 1 < len(sys.argv):
+                    language = sys.argv[i + 1]
+                elif sys.argv[i] == "--prompt-level" and i + 1 < len(sys.argv):
+                    prompt_level = sys.argv[i + 1]
+            
+            # Start chat session
+            chat_command(None, None, None, language, prompt_level)
+            return
+    cli()
 
 if __name__ == "__main__":
     main()
