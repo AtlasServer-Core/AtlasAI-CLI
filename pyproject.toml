@@ -29,7 +29,8 @@ dependencies = [
   "openai-agents",
   "openai",
   "rich",
-  "anthropic"
+  "anthropic",
+  "markdown"
 ]
 
 [project.urls]

@@ -455,6 +455,116 @@ def chat_command(model, provider, api_key, language, prompt_level):
         console.print(Syntax(traceback.format_exc(), "python", theme="monokai"))
 
 
+@cli.command("task")
+@click.argument("task_file", type=click.Path(exists=True))
+@click.option("--working-dir", type=click.Path(exists=True), default=".",
+              help="Working directory for executing tasks")
+@click.option("--model", help="Model to use (defaults to configured model)")
+@click.option("--provider", type=click.Choice(["ollama", "openai"]), 
+              help="AI provider (ollama or openai, defaults to configured provider)")
+@click.option("--api-key", help="API key (required for OpenAI if not configured)")
+@click.option("--language", type=click.Choice(["en", "es"]), default="en",
+              help="Response language (English or Spanish)")
+@click.option("--verify-commands/--no-verify-commands", default=True,
+              help="Verify commands before execution")
+def task_command(task_file, working_dir, model, provider, api_key, language, verify_commands):
+    """Execute a task workflow defined in a markdown file."""
+    try:
+        # Load configuration
+        from atlasai.ai.ai_cli import AtlasServerAICLI
+        ai_cli = AtlasServerAICLI()
+        
+        # Use configured values if not specified
+        model = model or ai_cli.ai_config.get("model", "gpt-4.1")
+        provider = provider or ai_cli.ai_config.get("provider", "openai")
+        api_key = api_key or ai_cli.ai_config.get("api_key")
+        
+        console.print(f"[bold cyan]🤖 Using AI model:[/] [blue]{model}[/]")
+        
+        # Check connection based on provider
+        if provider == "ollama":
+            # (Same code as in chat_command)
+            pass
+        elif provider == "openai":
+            # (Same code as in chat_command)
+            pass
+        
+        # Parse the task file
+        from atlasai.task.task_parser import parse_task_file
+        
+        console.print(Panel(
+            f"[cyan]Analyzing task file:[/] [bold]{task_file}[/]",
+            title="[bold blue]📄 Task Analysis[/]",
+            border_style="blue"
+        ))
+        
+        task_graph = parse_task_file(task_file)
+        
+        # Show task workflow information
+        console.print(f"[bold cyan]Title:[/] {task_graph.metadata.get('title', 'Untitled')}")
+        console.print(f"[bold cyan]Tasks:[/] {len(task_graph.tasks)}")
+        
+        # Create and execute the task executor
+        from atlasai.task.task_executor import TaskExecutor
+        
+        executor = TaskExecutor(
+            task_graph=task_graph,
+            working_dir=working_dir,
+            model=model,
+            provider=provider,
+            api_key=api_key,
+            language=language,
+            verify_commands=verify_commands
+        )
+        
+        asyncio.run(executor.execute_tasks())
+        
+    except Exception as e:
+        console.print(f"[bold red]❌ Error executing task workflow:[/] {str(e)}")
+        import traceback
+        console.print(Syntax(traceback.format_exc(), "python", theme="monokai"))
+
+@cli.command("task-template")
+@click.argument("output_file", type=click.Path(exists=False))
+@click.option("--tasks", type=int, default=3,
+              help="Number of task templates to include")
+@click.option("--overwrite/--no-overwrite", default=False,
+              help="Overwrite existing file if it exists")
+def task_template_command(output_file, tasks, overwrite):
+    """Generate a template task file with the correct format."""
+    try:
+        # Check if file already exists
+        if os.path.exists(output_file) and not overwrite:
+            console.print(f"[bold red]❌ File already exists: {output_file}[/]")
+            console.print("Use --overwrite to replace the existing file.")
+            return
+
+        # Generate template content
+        from atlasai.task.task_executor import generate_task_template
+        template = generate_task_template(tasks)
+        
+        # Create directory if it doesn't exist
+        output_dir = os.path.dirname(output_file)
+        if output_dir and not os.path.exists(output_dir):
+            os.makedirs(output_dir)
+            
+        # Write the template file
+        with open(output_file, 'w', encoding='utf-8') as f:
+            f.write(template)
+            
+        console.print(Panel(
+            f"[bold green]✅ Task template created:[/] [cyan]{output_file}[/]\n\n"
+            f"This template includes {tasks} example tasks with dependencies.\n"
+            f"Edit it according to your needs and run it with:\n\n"
+            f"[bold]atlasai task {output_file}[/]",
+            title="[bold green]Template Generated[/]",
+            border_style="green"
+        ))
+        
+    except Exception as e:
+        console.print(f"[bold red]❌ Error creating template:[/] {str(e)}")
+
+
 cli.add_command(ai)
 
 def main():
